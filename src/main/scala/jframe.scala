@@ -13,22 +13,7 @@
 // import javax.swing.{JFrame, JPanel}
 // import javax.swing.WindowConstants._
 // import scala.math.{min, max}
-
-// // First, let's define our data structure
-// case class OHLCData(
-//   timestamp: LocalDateTime,
-//   open: Double,
-//   high: Double,
-//   low: Double,
-//   close: Double,
-//   volume: Int
-// )
-
-// case class AnomalyResult(
-//   data: OHLCData,
-//   anomalyTypes: List[String],
-//   reason: String
-// )
+// import utils._
 
 // case class OHLCChart(data: List[OHLCData], anomalies: List[AnomalyResult]) extends JPanel {
 //   private val padding = 50
@@ -138,27 +123,26 @@
 //   }
 // }
 
-// object ForexAnalysisApp {
-//   val detector = new ForexAnomalyDetector()
-//   val filePath = "forex_data.csv"
+// object ForexAnalysisApp extends App {
+//   val detectorJframe = new ForexAnomalyDetector()
   
-//   // try {
-//   //   val reader = new CSVReader(new FileReader(filePath), '\t')
-//   //   val allRows = reader.readAll().asScala.toList.tail // Skip header
-//   //   val data = detector.parseData(allRows)
-//   //   val anomalies = detector.detectAnomalies(filePath)
+//   try {
+//     val reader = new CSVReader(new FileReader(filePath))
+//     val allRows = reader.readAll().asScala.toList // Skip header
+//     val data = detectorJframe.parseData(allRows)
+//     val anomalies = detectorJframe.detectAnomalies(filePath)
     
-//   //   // Create and show visualization
-//   //   val frame = new JFrame("USDJPY OHLC Chart with Anomalies")
-//   //   frame.setDefaultCloseOperation(EXIT_ON_CLOSE)
-//   //   frame.add(new OHLCChart(data, anomalies))
-//   //   frame.pack()
-//   //   frame.setLocationRelativeTo(null)
-//   //   frame.setVisible(true)
+//     // Create and show visualization
+//     val frame = new JFrame("USDJPY OHLC Chart with Anomalies")
+//     frame.setDefaultCloseOperation(EXIT_ON_CLOSE)
+//     frame.add(new OHLCChart(data, anomalies))
+//     frame.pack()
+//     frame.setLocationRelativeTo(null)
+//     frame.setVisible(true)
     
-//   // } catch {
-//   //   case e: Exception =>
-//   //     println(s"Error: ${e.getMessage}")
-//   //     e.printStackTrace()
-//   // }
+//   } catch {
+//     case e: Exception =>
+//       println(s"Error: ${e.getMessage}")
+//       e.printStackTrace()
+//   }
 // }
