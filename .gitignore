@@ -72,3 +72,4 @@ project/**/metals.sbt
 .tool-versions
 
 financial_anomaly_data4.csv
+financial_anomaly_data5.csv

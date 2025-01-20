@@ -1,13 +1,16 @@
+package com.example
+
 import org.apache.spark.sql.{SparkSession, functions => F}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.expressions._
 import org.apache.spark.sql.SaveMode
 
-object SparkMain extends App {
+// object SparkMain extends App {
+object SparkMain {
   val filePath = "data/USDJPY30.csv"
 
   val spark = SparkSession.builder()
-    .appName("Spark Statistics")
+    .appName("Spark Test")
     .master("local[*]") // Run locally with all cores
     .getOrCreate()
 

@@ -1,9 +1,12 @@
+import utils._
 import com.opencsv.CSVReader
 import java.io.FileReader
 import java.text.SimpleDateFormat
 import java.util.Date
 import scala.collection.mutable
 import scala.collection.JavaConverters._
+
+
 
 // Case class representing transaction data
 case class Transaction(
@@ -97,9 +100,9 @@ class ForexAnomalyDetector {
 }
 }
 
-object Main extends App {
+object TradAnomalyDetector extends App {
   val detector = new ForexAnomalyDetector()
-  val filePath = "data/financial_anomaly_data4.csv"
+  
   try {
     val anomalies = detector.detectAnomaliesWithZScore(filePath)
     // println("=== Detected Anomalies ===")
