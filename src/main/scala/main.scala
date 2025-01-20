@@ -47,8 +47,17 @@ class ForexAnomalyDetector {
   }
 
   // Detects anomalies in the given transactions
-def detectAnomaliesWithZScore(filePath: String): List[Anomaly] = {
+  def detectAnomaliesWithZScore(filePath: String): List[Anomaly] = {
+
+  val startReadingTime = System.nanoTime()
+
   val data = readData(filePath)
+
+  val endReadingTime = System.nanoTime()
+  val readingTimeDifference = (endReadingTime - startReadingTime) / 1e9 // Convert to seconds
+  println(s"Read time taken: $readingTimeDifference s")
+
+  val startProcessingTime = System.nanoTime()
   val anomalies = mutable.ListBuffer[Anomaly]()
 
   data.groupBy(_.accountId).foreach { case (_, transactions) =>
@@ -79,34 +88,35 @@ def detectAnomaliesWithZScore(filePath: String): List[Anomaly] = {
     }
   }
 
-  anomalies.toList
+  val ret = anomalies.toList
+  val endProcessingTime = System.nanoTime()
+  val processingTimeDifference = (endProcessingTime - startProcessingTime) / 1e9 // Convert to seconds
+  println(s"Processing time taken: $processingTimeDifference s")
+  ret
+
 }
 }
 
 object Main extends App {
-  val startTime = System.nanoTime()
   val detector = new ForexAnomalyDetector()
-  val filePath = "data/financial_anomaly_data2.csv"
+  val filePath = "data/financial_anomaly_data4.csv"
   try {
     val anomalies = detector.detectAnomaliesWithZScore(filePath)
-    val endTime = System.nanoTime()
-    val timeDifference = (endTime - startTime) / 1e6 // Convert to milliseconds
-
-    println("=== Detected Anomalies ===")
+    // println("=== Detected Anomalies ===")
     anomalies.foreach { anomaly =>
-      println(s"""
-        |Time: ${anomaly.data.timestamp}
-        |Types: ${anomaly.anomalyTypes.mkString(", ")}
-        |Reason: ${anomaly.reason}
-        |Transaction Details:
-        |  TransactionID: ${anomaly.data.transactionId}
-        |  AccountID: ${anomaly.data.accountId}
-        |  Amount: ${anomaly.data.amount}
-        |  Merchant: ${anomaly.data.merchant}
-        |  TransactionType: ${anomaly.data.transactionType}
-        |  Location: ${anomaly.data.location}
-        |${"-" * 50}
-        """.stripMargin)
+      // println(s"""
+      //   |Time: ${anomaly.data.timestamp}
+      //   |Types: ${anomaly.anomalyTypes.mkString(", ")}
+      //   |Reason: ${anomaly.reason}
+      //   |Transaction Details:
+      //   |  TransactionID: ${anomaly.data.transactionId}
+      //   |  AccountID: ${anomaly.data.accountId}
+      //   |  Amount: ${anomaly.data.amount}
+      //   |  Merchant: ${anomaly.data.merchant}
+      //   |  TransactionType: ${anomaly.data.transactionType}
+      //   |  Location: ${anomaly.data.location}
+      //   |${"-" * 50}
+      //   """.stripMargin)
     }
     println("\n=== Summary ===")
     println(s"Total anomalies detected: ${anomalies.size}")
@@ -117,7 +127,6 @@ object Main extends App {
     anomalyTypes.foreach { case (type_, count) =>
       println(f"$type_%-15s: $count")
     }
-    println(s"Time taken: $timeDifference ms")
   } catch {
     case e: Exception =>
       println(s"Error processing file: ${e.getMessage}")
