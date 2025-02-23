@@ -1,193 +1,138 @@
-package example
-
-import scalaj.http._
-import java.io.{ File, FileReader }
-import java.io.{ FileWriter, PrintWriter }
-import java.nio.file.{ Files, Paths }
-import java.time.LocalDateTime
+import utils._
 import com.opencsv.CSVReader
+import java.io.FileReader
+import java.text.SimpleDateFormat
+import java.util.Date
+import scala.collection.mutable
 import scala.collection.JavaConverters._
-import java.time.format.DateTimeFormatter
-import scala.collection.mutable.ArrayBuffer
 
-// First, let's define our data structure
-case class OHLCData(
-  timestamp: LocalDateTime,
-  open: Double,
-  high: Double,
-  low: Double,
-  close: Double,
-  volume: Int
+
+
+// Case class representing transaction data
+case class Transaction(
+  timestamp: Date,
+  transactionId: String,
+  accountId: String,
+  amount: Double,
+  merchant: String,
+  transactionType: String,
+  location: String
 )
 
-
-case class AnomalyResult(
-  data: OHLCData,
+case class Anomaly(
+  data: Transaction,
   anomalyTypes: List[String],
   reason: String
 )
 
-class ForexAnomalyDetector(windowSize: Int = 5) {
-  private val priceChangeThreshold = 0.003 // 0.3% change threshold
-  private val volumeMultipleThreshold = 2.0 // 2x average volume threshold
-  
-  def detectAnomalies(filePath: String): List[AnomalyResult] = {
-    val reader = new CSVReader(new FileReader(filePath))
-    try {
-      // Read and parse data
-      val rawData = reader.readAll().asScala.toList  // Skip header
-      println("rawData", rawData)
-      val data = parseData(rawData)
-      
-      // Process data in windows and detect anomalies
-      data.sliding(windowSize).flatMap { window =>
-        val current = window.last
-        detectAnomaliesInWindow(current, window.init)
-      }.toList
-      
-    } finally {
-      reader.close()
-    }
-  }
-  
-  private def parseData(rows: List[Array[String]]): List[OHLCData] = {
-    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-    println("rows",rows)
-    
-    rows.map { row =>
-      // println("row",row)
-      // val dateTimeParts = row(0).split("\\s+").take(2)
-      // val datetime = dateTimeParts.mkString(" ")
-    
-      // // println("row", row)
-      // println("datetime", datetime)
-      // // println("row(0).trim", row(0).trim)
-      // println("row",row)
-      // Split the single string into fields using tab as delimiter
-      val fields = row(0).split("\t")
-      val datetime = fields(0).trim
+class ForexAnomalyDetector {
 
-      OHLCData(
-        LocalDateTime.parse(datetime, formatter),
-        fields(1).trim.toDouble,
-        fields(2).trim.toDouble,
-        fields(3).trim.toDouble,
-        fields(4).trim.toDouble,
-        fields(5).trim.toInt
+  private val dateFormat = new SimpleDateFormat("dd-MM-yyyy HH:mm")
+
+  // Reads CSV data and parses it into a list of Transaction objects
+  private def readData(filePath: String): List[Transaction] = {
+    val reader = new CSVReader(new FileReader(filePath))
+    val rows = reader.readAll().asScala.toList.tail
+    reader.close()
+
+    rows.map { row =>
+      val datetime = row(0).trim
+      Transaction(
+        timestamp = dateFormat.parse(datetime),
+        transactionId = row(1),
+        accountId = row(2),
+        amount = row(3).toDouble,
+        merchant = row(4),
+        transactionType = row(5),
+        location = row(6)
       )
-    }
+    }.toList
   }
-  
-  private def detectAnomaliesInWindow(
-    current: OHLCData, 
-    previousCandles: List[OHLCData]
-  ): Option[AnomalyResult] = {
-    val anomalies = ArrayBuffer[String]()
-    val reasons = ArrayBuffer[String]()
-    
-    // Calculate baseline metrics
-    val avgVolume = previousCandles.map(_.volume).sum / previousCandles.size
-    val avgRange = previousCandles.map(c => c.high - c.low).sum / previousCandles.size
-    val priceRange = current.high - current.low
-    
-    // 1. Check for price spikes
-    val priceChange = math.abs(current.close - current.open) / current.open
-    if (priceChange > priceChangeThreshold) {
-      anomalies += "price_spike"
-      reasons += f"Price change of ${priceChange * 100}%.2f%% exceeds threshold of ${priceChangeThreshold * 100}%.2f%%"
-    }
-    
-    // 2. Check for volume anomalies
-    if (current.volume > avgVolume * volumeMultipleThreshold) {
-      anomalies += "volume_spike"
-      reasons += f"Volume of ${current.volume} is ${current.volume / avgVolume}%.2fx average volume"
-    }
-    
-    // 3. Check for gaps between candles
-    previousCandles.lastOption.foreach { prev =>
-      val gap = math.abs(current.open - prev.close)
-      if (gap > avgRange) {
-        anomalies += "price_gap"
-        reasons += f"Gap of $gap pips between candles"
+
+  // Detects anomalies in the given transactions
+  def detectAnomaliesWithZScore(filePath: String): List[Anomaly] = {
+
+  val startReadingTime = System.nanoTime()
+
+  val data = readData(filePath)
+
+  val endReadingTime = System.nanoTime()
+  val readingTimeDifference = (endReadingTime - startReadingTime) / 1e9 // Convert to seconds
+  println(s"Read time taken: $readingTimeDifference s")
+
+  val startProcessingTime = System.nanoTime()
+  val anomalies = mutable.ListBuffer[Anomaly]()
+
+  data.groupBy(_.accountId).foreach { case (_, transactions) =>
+    val amounts = transactions.map(_.amount)
+    val mean = amounts.sum / amounts.size
+    val stdDev = math.sqrt(amounts.map(a => math.pow(a - mean, 2)).sum / amounts.size)
+
+    transactions.foreach { transaction =>
+      val zScore = if (stdDev > 0) (transaction.amount - mean) / stdDev else 0.0
+      val anomalyTypes = mutable.ListBuffer[String]()
+      val reasons = mutable.ListBuffer[String]()
+
+      // Check for z-score anomalies
+      if (math.abs(zScore) > 3) {
+        anomalyTypes += "Z-Score Anomaly"
+        reasons += f"Transaction amount ${transaction.amount} (z-score: $zScore%.2f) is unusual."
+      }
+
+      // Retain existing checks (e.g., high amount, location changes)
+      if (transaction.amount > 50000) {
+        anomalyTypes += "High Amount"
+        reasons += s"Transaction amount ${transaction.amount} exceeds threshold."
+      }
+
+      if (anomalyTypes.nonEmpty) {
+        anomalies += Anomaly(transaction, anomalyTypes.toList, reasons.mkString("; "))
       }
     }
-    
-    // 4. Check for unusual volatility
-    val volatility = priceRange / current.open
-    val avgVolatility = previousCandles.map(c => (c.high - c.low) / c.open).sum / previousCandles.size
-    if (volatility > avgVolatility * 2) {
-      anomalies += "high_volatility"
-      reasons += f"Volatility ${volatility * 100}%.2f%% is more than 2x average"
-    }
-    
-    if (anomalies.nonEmpty) {
-      Some(AnomalyResult(
-        current,
-        anomalies.toList,
-        reasons.mkString("; ")
-      ))
-    } else None
   }
+
+  val ret = anomalies.toList
+  val endProcessingTime = System.nanoTime()
+  val processingTimeDifference = (endProcessingTime - startProcessingTime) / 1e9 // Convert to seconds
+  println(s"Processing time taken: $processingTimeDifference s")
+  ret
+
+}
 }
 
-object Main extends App {
-  // val response = Http("https://jsonplaceholder.typicode.com/posts/1").asString
-  // println("Response Code: " + response.code)
-  // println("Response Body: " + response.body)
-    // Define the path to the CSV file
-  val filePath = "data/USDJPY30.csv"
-
-  // val reader = new CSVReader(new FileReader(filePath))
-  // try {
-  //   val allRows = reader.readAll()
-  //   allRows.forEach(row => {
-  //     println(row.mkString(", "))
-  //   })
-  // } catch {
-  //   case e: Exception =>
-  //     println(s"Error reading CSV file: ${e.getMessage}")
-  // } finally {
-  //   reader.close()
-  // }
-  
-  val startTime = System.nanoTime()
+object TradAnomalyDetector extends App {
   val detector = new ForexAnomalyDetector()
   
   try {
-    val anomalies = detector.detectAnomalies(filePath)
-    
-    println("=== Detected Anomalies ===")
+    val anomalies = detector.detectAnomaliesWithZScore(filePath)
+    // println("=== Detected Anomalies ===")
     anomalies.foreach { anomaly =>
-      println(s"""
-        |Time: ${anomaly.data.timestamp}
-        |Types: ${anomaly.anomalyTypes.mkString(", ")}
-        |Reason: ${anomaly.reason}
-        |OHLC: ${anomaly.data.open}, ${anomaly.data.high}, ${anomaly.data.low}, ${anomaly.data.close}
-        |Volume: ${anomaly.data.volume}
-        |${"-" * 50}
-        """.stripMargin)
+      // println(s"""
+      //   |Time: ${anomaly.data.timestamp}
+      //   |Types: ${anomaly.anomalyTypes.mkString(", ")}
+      //   |Reason: ${anomaly.reason}
+      //   |Transaction Details:
+      //   |  TransactionID: ${anomaly.data.transactionId}
+      //   |  AccountID: ${anomaly.data.accountId}
+      //   |  Amount: ${anomaly.data.amount}
+      //   |  Merchant: ${anomaly.data.merchant}
+      //   |  TransactionType: ${anomaly.data.transactionType}
+      //   |  Location: ${anomaly.data.location}
+      //   |${"-" * 50}
+      //   """.stripMargin)
     }
-    
-    // Print summary statistics
     println("\n=== Summary ===")
     println(s"Total anomalies detected: ${anomalies.size}")
-    
-    // Group anomalies by type
     val anomalyTypes = anomalies.flatMap(_.anomalyTypes)
       .groupBy(identity)
       .map { case (type_, occurrences) => (type_, occurrences.size) }
-    
     println("\nAnomaly type breakdown:")
     anomalyTypes.foreach { case (type_, count) =>
       println(f"$type_%-15s: $count")
     }
-    val endTime = System.nanoTime()
-    val timeDifference = (endTime - startTime) / 1e6 // Convert to milliseconds
-    println(s"Time taken: $timeDifference ms")
   } catch {
     case e: Exception =>
       println(s"Error processing file: ${e.getMessage}")
       e.printStackTrace()
   }
-  
 }
